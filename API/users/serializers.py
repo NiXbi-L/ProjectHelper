@@ -19,8 +19,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = User
-        fields = ['id', 'email', 'username', 'first_name', 'last_name', 'avatar', 'date_joined']
-        read_only_fields = ['id', 'email', 'username', 'date_joined']
+        fields = ['id', 'email', 'username', 'first_name', 'last_name', 'avatar', 'date_joined', 'is_staff']
+        read_only_fields = ['id', 'email', 'username', 'date_joined', 'is_staff']
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -55,6 +55,41 @@ class RegisterSerializer(serializers.ModelSerializer):
             password=validated_data['password'],
             first_name=validated_data.get('first_name', ''),
             last_name=validated_data.get('last_name', ''),
+        )
+        return user
+
+
+class TeacherRegisterSerializer(RegisterSerializer):
+    """Сериализатор для регистрации преподавателя"""
+    teacher_key = serializers.CharField(write_only=True, required=True, label='Ключ регистрации преподавателя')
+    
+    class Meta(RegisterSerializer.Meta):
+        fields = RegisterSerializer.Meta.fields + ['teacher_key']
+    
+    def validate(self, attrs):
+        # Вызываем валидацию родительского класса
+        attrs = super().validate(attrs)
+        
+        # Проверяем ключ регистрации преподавателя
+        from django.conf import settings
+        teacher_key = attrs.get('teacher_key')
+        expected_key = getattr(settings, 'TEACHER_REGISTRATION_KEY', 'teacher-secret-key-change-in-production')
+        
+        if teacher_key != expected_key:
+            raise serializers.ValidationError({"teacher_key": "Неверный ключ регистрации преподавателя"})
+        
+        return attrs
+    
+    def create(self, validated_data):
+        validated_data.pop('teacher_key')
+        validated_data.pop('password2')
+        user = User.objects.create_user(
+            username=validated_data['email'],
+            email=validated_data['email'],
+            password=validated_data['password'],
+            first_name=validated_data.get('first_name', ''),
+            last_name=validated_data.get('last_name', ''),
+            is_staff=True,  # Устанавливаем is_staff=True для преподавателей
         )
         return user
 

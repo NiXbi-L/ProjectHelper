@@ -23,6 +23,7 @@ const Login = () => {
   const [password2, setPassword2] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [teacherKey, setTeacherKey] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -81,6 +82,48 @@ const Login = () => {
     }
   };
 
+  const handleTeacherRegister = async (e) => {
+    e.preventDefault();
+    setError('');
+    
+    if (password !== password2) {
+      setError('Пароли не совпадают');
+      return;
+    }
+    
+    if (!teacherKey) {
+      setError('Введите ключ регистрации преподавателя');
+      return;
+    }
+    
+    setLoading(true);
+    
+    try {
+      const response = await axios.post('/api/auth/users/register_teacher/', {
+        email,
+        password,
+        password2,
+        first_name: firstName,
+        last_name: lastName,
+        teacher_key: teacherKey,
+      });
+      
+      login(response.data.token, response.data.user);
+      alert('Вы успешно зарегистрированы как преподаватель!');
+      navigate('/');
+    } catch (err) {
+      const errors = err.response?.data;
+      if (typeof errors === 'object') {
+        const errorMessages = Object.values(errors).flat();
+        setError(errorMessages.join(', '));
+      } else {
+        setError('Ошибка регистрации преподавателя');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <Container component="main" maxWidth="xs">
       <Box
@@ -93,7 +136,7 @@ const Login = () => {
       >
         <Paper elevation={3} sx={{ p: 4, width: '100%' }}>
           <Typography component="h1" variant="h5" align="center" gutterBottom>
-            {tab === 0 ? 'Вход' : 'Регистрация'}
+            {tab === 0 ? 'Вход' : tab === 1 ? 'Регистрация' : 'Регистрация преподавателя'}
           </Typography>
           <Typography variant="body2" align="center" color="text.secondary" sx={{ mb: 3 }}>
             Доступ разрешен только для почты @dvfu.ru
@@ -102,6 +145,7 @@ const Login = () => {
           <Tabs value={tab} onChange={(e, newValue) => setTab(newValue)} sx={{ mb: 3 }}>
             <Tab label="Вход" />
             <Tab label="Регистрация" />
+            <Tab label="Преподаватель" />
           </Tabs>
 
           {error && (
@@ -143,7 +187,7 @@ const Login = () => {
                 Войти
               </Button>
             </Box>
-          ) : (
+          ) : tab === 1 ? (
             <Box component="form" onSubmit={handleRegister}>
               <TextField
                 margin="normal"
@@ -198,6 +242,74 @@ const Login = () => {
                 disabled={loading}
               >
                 Зарегистрироваться
+              </Button>
+            </Box>
+          ) : (
+            <Box component="form" onSubmit={handleTeacherRegister}>
+              <TextField
+                margin="normal"
+                required
+                fullWidth
+                label="Email (@dvfu.ru)"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoComplete="email"
+                autoFocus
+              />
+              <TextField
+                margin="normal"
+                fullWidth
+                label="Имя"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+              />
+              <TextField
+                margin="normal"
+                fullWidth
+                label="Фамилия"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+              />
+              <TextField
+                margin="normal"
+                required
+                fullWidth
+                label="Пароль"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="new-password"
+              />
+              <TextField
+                margin="normal"
+                required
+                fullWidth
+                label="Подтверждение пароля"
+                type="password"
+                value={password2}
+                onChange={(e) => setPassword2(e.target.value)}
+                autoComplete="new-password"
+              />
+              <TextField
+                margin="normal"
+                required
+                fullWidth
+                label="Ключ регистрации преподавателя"
+                type="password"
+                value={teacherKey}
+                onChange={(e) => setTeacherKey(e.target.value)}
+                helperText="Получите ключ у администратора системы"
+              />
+              <Button
+                type="submit"
+                fullWidth
+                variant="contained"
+                color="secondary"
+                sx={{ mt: 3, mb: 2 }}
+                disabled={loading}
+              >
+                Зарегистрироваться как преподаватель
               </Button>
             </Box>
           )}

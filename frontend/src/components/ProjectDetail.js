@@ -6,29 +6,35 @@ import {
   Box,
   Typography,
   Button,
-  TextField,
   Paper,
   List,
   ListItem,
   ListItemText,
   CircularProgress,
   Alert,
-  Tabs,
-  Tab,
   Chip,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
-  Card,
-  CardContent,
-  Checkbox,
+  IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  Grid,
   FormControlLabel,
+  Checkbox,
+  ListItemIcon,
+  Divider,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
-import StageComments from './StageComments';
+import DescriptionIcon from '@mui/icons-material/Description';
+import AssignmentIcon from '@mui/icons-material/Assignment';
+import {
+  Close,
+} from '@mui/icons-material';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import ProjectKanban from './ProjectKanban';
 
 const ProjectDetail = () => {
   const { id } = useParams();
@@ -37,11 +43,17 @@ const ProjectDetail = () => {
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [email, setEmail] = useState('');
-  const [tab, setTab] = useState(0);
-  const [stages, setStages] = useState([]);
-  const [selectedStageId, setSelectedStageId] = useState(null);
-  const [commentsDialogOpen, setCommentsDialogOpen] = useState(false);
+  const [passportDialog, setPassportDialog] = useState(false);
+  const [stagesDialog, setStagesDialog] = useState(false);
+  const { user } = useAuth();
+  
+  const isTeacher = user?.is_staff || user?.is_teacher;
+  const isTeamLeader = project?.team?.team_members?.some(
+    (m) => m.user?.id === user?.id && m.role === 'team_leader' && m.is_confirmed
+  );
+  const isTeamMember = project?.team?.team_members?.some(
+    (m) => m.user?.id === user?.id && m.is_confirmed
+  );
 
   useEffect(() => {
     if (!authLoading) {
@@ -53,21 +65,10 @@ const ProjectDetail = () => {
     }
   }, [id, isAuthenticated, authLoading, navigate]);
 
-  useEffect(() => {
-    if (project) {
-      // Загружаем этапы отдельно, если их нет в ответе проекта
-      if (project.stages && project.stages.length > 0) {
-        setStages(project.stages);
-      } else {
-        fetchStages();
-      }
-    }
-  }, [project]);
-
   const fetchProject = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(`/api/projects/projects/${id}/enter/`);
+      const response = await axios.get(`/api/projects/projects/${id}/`);
       setProject(response.data);
     } catch (err) {
       setError('Ошибка при загрузке проекта');
@@ -77,39 +78,26 @@ const ProjectDetail = () => {
     }
   };
 
-  const fetchStages = async () => {
-    try {
-      const response = await axios.get(`/api/projects/stages/?project=${id}`);
-      const stagesData = response.data.results || response.data;
-      setStages(Array.isArray(stagesData) ? stagesData : []);
-    } catch (err) {
-      console.error('Error fetching stages:', err);
-      setStages([]);
-    }
+  const getStatusColor = (status) => {
+    const colors = {
+      draft: 'default',
+      submitted: 'info',
+      approved: 'success',
+      revision: 'warning',
+      rejected: 'error',
+    };
+    return colors[status] || 'default';
   };
 
-  const toggleStageComplete = async (stageId) => {
-    try {
-      await axios.post(`/api/projects/stages/${stageId}/toggle_complete/`);
-      fetchStages();
-    } catch (err) {
-      console.error('Error toggling stage:', err);
-    }
-  };
-
-  const handleAddMember = async () => {
-    if (!email) {
-      alert('Введите email');
-      return;
-    }
-    try {
-      await axios.post(`/api/projects/projects/${id}/add_member/`, { email });
-      setEmail('');
-      fetchProject();
-      alert('Участник добавлен');
-    } catch (err) {
-      alert(err.response?.data?.error || 'Ошибка при добавлении участника');
-    }
+  const getStatusLabel = (status) => {
+    const labels = {
+      draft: 'Черновик',
+      submitted: 'На проверке',
+      approved: 'Принято',
+      revision: 'На доработке',
+      rejected: 'Отклонено',
+    };
+    return labels[status] || status;
   };
 
   if (loading) {
@@ -126,146 +114,166 @@ const ProjectDetail = () => {
 
   return (
     <Box>
-      <Button
-        startIcon={<ArrowBackIcon />}
-        onClick={() => navigate('/')}
-        sx={{ mb: 2 }}
-      >
-        Назад к проектам
-      </Button>
-      <Typography variant="h4" gutterBottom>
-        {project.name}
-      </Typography>
-      <Typography variant="body1" color="text.secondary" paragraph>
-        {project.description || 'Нет описания'}
-      </Typography>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+        <Box display="flex" alignItems="center" gap={2}>
+          <Button
+            startIcon={<ArrowBackIcon />}
+            onClick={() => navigate('/')}
+          >
+            Назад
+          </Button>
+          <Typography variant="h4">{project.name}</Typography>
+          <Chip
+            label={getStatusLabel(project.status)}
+            color={getStatusColor(project.status)}
+          />
+        </Box>
+        <Box display="flex" gap={1}>
+          <Button
+            variant="outlined"
+            startIcon={<DescriptionIcon />}
+            onClick={() => setPassportDialog(true)}
+          >
+            Паспорт проекта
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<AssignmentIcon />}
+            onClick={() => setStagesDialog(true)}
+          >
+            Этапы ({project.stages?.length || 0})
+          </Button>
+        </Box>
+      </Box>
 
-      <Tabs value={tab} onChange={(e, newValue) => setTab(newValue)} sx={{ mb: 3 }}>
-        <Tab label="Участники" />
-        <Tab label="Этапы" />
-      </Tabs>
-
-      {tab === 0 && (
-        <Paper sx={{ p: 3 }}>
-          <Typography variant="h6" gutterBottom>
-            Участники проекта
-          </Typography>
-          <List>
-            {project.members?.map((member) => (
-              <ListItem key={member.id}>
-                <ListItemText
-                  primary={member.user.email}
-                  secondary={`Роль: ${member.role === 'owner' ? 'Владелец' : 'Участник'}`}
-                />
-              </ListItem>
-            ))}
-          </List>
-          {project.is_owner && (
-            <Box sx={{ mt: 3 }}>
-              <Typography variant="subtitle1" gutterBottom>
-                Добавить участника
-              </Typography>
-              <Box display="flex" gap={2} sx={{ mt: 1 }}>
-                <TextField
-                  label="Email (@dvfu.ru)"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  size="small"
-                  fullWidth
-                />
-                <Button variant="contained" onClick={handleAddMember}>
-                  Добавить
-                </Button>
-              </Box>
-            </Box>
-          )}
-        </Paper>
+      {/* Канбан-доска как основной интерфейс - всегда отображается */}
+      {project && (
+        <ProjectKanban
+          projectId={id}
+          isTeamLeader={isTeamLeader}
+          isTeacher={isTeacher}
+          isTeamMember={isTeamMember}
+        />
       )}
 
-      {tab === 1 && (
-        <Box>
-          <Typography variant="h6" gutterBottom>
-            Этапы разработки проекта
-          </Typography>
-          {stages.length === 0 ? (
-            <Alert severity="info">Этапы проекта будут созданы автоматически при создании проекта. Если этапы не отображаются, возможно они еще не созданы для этого проекта.</Alert>
+      {/* Диалог паспорта проекта */}
+      <Dialog
+        open={passportDialog}
+        onClose={() => setPassportDialog(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box display="flex" justifyContent="space-between" alignItems="center">
+            Паспорт проекта
+            <IconButton onClick={() => setPassportDialog(false)}>
+              <Close />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          {project.passport_url ? (
+            <Box>
+              <Typography variant="body1" sx={{ mb: 2 }}>
+                Паспорт проекта загружен как файл:
+              </Typography>
+              <Button
+                variant="outlined"
+                href={project.passport_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                sx={{ mb: 2 }}
+              >
+                Скачать паспорт проекта
+              </Button>
+              {project.passport_text && (
+                <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap', mt: 2 }}>
+                  {project.passport_text}
+                </Typography>
+              )}
+            </Box>
           ) : (
-            stages.map((stage) => (
-              <Card key={stage.id} sx={{ mb: 2 }}>
-                <CardContent>
-                  <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
-                    <Box display="flex" alignItems="center" gap={2}>
-                      <FormControlLabel
-                        control={
-                          <Checkbox
-                            checked={stage.is_completed}
-                            onChange={() => toggleStageComplete(stage.id)}
-                            icon={<RadioButtonUncheckedIcon />}
-                            checkedIcon={<CheckCircleIcon />}
-                          />
-                        }
-                        label={stage.name}
-                      />
-                      <Chip 
-                        label={stage.stage_type} 
-                        size="small" 
-                        color={stage.is_completed ? 'success' : 'default'}
-                      />
-                    </Box>
+            <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap', mb: 3 }}>
+              {project.passport_text || 'Паспорт проекта не загружен'}
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPassportDialog(false)}>Закрыть</Button>
+          <Button
+            variant="contained"
+            onClick={() => {
+              setPassportDialog(false);
+              navigate(`/projects/${id}/passport`);
+            }}
+          >
+            Редактировать
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Диалог этапов проекта */}
+      <Dialog
+        open={stagesDialog}
+        onClose={() => setStagesDialog(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box display="flex" justifyContent="space-between" alignItems="center">
+            Этапы проекта
+            <IconButton onClick={() => setStagesDialog(false)}>
+              <Close />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          {project.stages && project.stages.length > 0 ? (
+            <List>
+              {project.stages.map((stage) => (
+                <Paper key={stage.id} sx={{ p: 2, mb: 2 }}>
+                  <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                    <Typography variant="h6">{stage.name}</Typography>
+                    <Chip
+                      label={
+                        stage.status === 'in_progress' ? 'В работе' :
+                        stage.status === 'submitted' ? 'На проверке' :
+                        stage.status === 'approved' ? 'Принято' : 'На доработке'
+                      }
+                      color={
+                        stage.status === 'approved' ? 'success' :
+                        stage.status === 'submitted' ? 'info' :
+                        stage.status === 'revision' ? 'warning' : 'default'
+                      }
+                      size="small"
+                    />
                   </Box>
                   <Typography variant="body2" color="text.secondary" paragraph>
                     {stage.description}
                   </Typography>
-                  
-                  {stage.hints && stage.hints.length > 0 && (
-                    <Accordion>
-                      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                        <Typography variant="subtitle2">
-                          Подсказки ({stage.hints.length})
-                        </Typography>
-                      </AccordionSummary>
-                      <AccordionDetails>
-                        {stage.hints.map((hint) => (
-                          <Box key={hint.id} sx={{ mb: 2 }}>
-                            <Typography variant="subtitle2" gutterBottom>
-                              {hint.title}
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary">
-                              {hint.content}
-                            </Typography>
-                          </Box>
-                        ))}
-                      </AccordionDetails>
-                    </Accordion>
-                  )}
-                  
-                  <Box sx={{ mt: 2 }}>
-                    <Button
-                      size="small"
-                      onClick={() => {
-                        setSelectedStageId(stage.id);
-                        setCommentsDialogOpen(true);
-                      }}
-                    >
-                      Комментарии ({stage.comments_count || 0})
-                    </Button>
-                  </Box>
-                </CardContent>
-              </Card>
-            ))
+                  <Button
+                    variant="outlined"
+                    onClick={() => {
+                      setStagesDialog(false);
+                      navigate(`/projects/${id}/stages/${stage.id}`);
+                    }}
+                    sx={{ mt: 1 }}
+                  >
+                    Открыть этап
+                  </Button>
+                </Paper>
+              ))}
+            </List>
+          ) : (
+            <Alert severity="info">
+              Этапы проекта будут созданы после принятия паспорта проекта преподавателем.
+            </Alert>
           )}
-        </Box>
-      )}
-
-      <StageComments
-        stageId={selectedStageId}
-        open={commentsDialogOpen}
-        onClose={() => {
-          setCommentsDialogOpen(false);
-          setSelectedStageId(null);
-          fetchStages();
-        }}
-      />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setStagesDialog(false)}>Закрыть</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

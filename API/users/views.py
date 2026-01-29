@@ -6,7 +6,7 @@ from django.contrib.auth import get_user_model, authenticate
 from rest_framework.authtoken.models import Token
 from .serializers import (
     UserSerializer, UserProfileSerializer, 
-    RegisterSerializer, LoginSerializer
+    RegisterSerializer, TeacherRegisterSerializer, LoginSerializer
 )
 
 User = get_user_model()
@@ -69,6 +69,20 @@ class UserViewSet(viewsets.ModelViewSet):
                     {'error': 'Неверный email или пароль'}, 
                     status=status.HTTP_401_UNAUTHORIZED
                 )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=['post'], permission_classes=[AllowAny])
+    def register_teacher(self, request):
+        """Регистрация преподавателя (требует специальный ключ)"""
+        serializer = TeacherRegisterSerializer(data=request.data)
+        if serializer.is_valid():
+            user = serializer.save()
+            token, created = Token.objects.get_or_create(user=user)
+            return Response({
+                'token': token.key,
+                'user': UserProfileSerializer(user).data,
+                'message': 'Преподаватель успешно зарегистрирован'
+            }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])

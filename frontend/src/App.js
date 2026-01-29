@@ -11,6 +11,11 @@ import Box from '@mui/material/Box';
 
 import ProjectsList from './components/ProjectsList';
 import ProjectDetail from './components/ProjectDetail';
+import TeamDetail from './components/TeamDetail';
+import ProjectPassport from './components/ProjectPassport';
+import StageDetail from './components/StageDetail';
+import TasksKanban from './components/TasksKanban';
+import TeacherDashboard from './components/TeacherDashboard';
 import Login from './components/Login';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
@@ -47,6 +52,11 @@ function AppContent() {
           </Typography>
           {isAuthenticated && (
             <>
+              {(user?.is_staff || user?.is_teacher) && (
+                <Button color="inherit" onClick={() => navigate('/teacher-dashboard')} sx={{ mr: 2 }}>
+                  Панель преподавателя
+                </Button>
+              )}
               <Typography variant="body2" sx={{ mr: 2 }}>
                 {user?.email}
               </Typography>
@@ -61,7 +71,12 @@ function AppContent() {
         <Routes>
           <Route path="/" element={<ProjectsList />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/teams/:id" element={<TeamDetail />} />
           <Route path="/projects/:id" element={<ProjectDetail />} />
+          <Route path="/projects/:id/passport" element={<ProjectPassport />} />
+          <Route path="/projects/:projectId/stages/:stageId" element={<StageDetail />} />
+          <Route path="/projects/:projectId/stages/:stageId/tasks" element={<TasksKanban />} />
+          <Route path="/teacher-dashboard" element={<TeacherDashboard />} />
         </Routes>
       </Container>
     </Box>

@@ -166,3 +166,6 @@ USE_X_FORWARDED_HOST = True
 USE_X_FORWARDED_PORT = True
 SECURE_PROXY_SSL_HEADER = None  # Для HTTP в локальной разработке
 
+# Ключ для регистрации преподавателей (измените в production!)
+TEACHER_REGISTRATION_KEY = os.getenv('TEACHER_REGISTRATION_KEY', 'teacher-secret-key-change-in-production')
+
